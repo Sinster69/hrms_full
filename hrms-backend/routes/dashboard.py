@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
 from database.connection import get_db
 from models.attendance import Attendance
@@ -39,24 +39,52 @@ def get_dashboard(db: Session = Depends(get_db), user=Depends(get_current_user))
         .first()
     )
 
+    chart_data = []
+
+    for i in range(6, -1, -1):
+        day = date.today() - timedelta(days=i)
+
+        record_day = (
+            db.query(Attendance)
+            .filter(Attendance.user_id == user["id"], Attendance.date == day)
+            .first()
+        )
+
+        hours = 0
+
+        if record_day and record_day.total_hours:
+            hours = round(record_day.total_hours, 2)
+
+        chart_data.append({"day": day.strftime("%a"), "hours": hours})
+
     if not record:
         attendance_data = {
             "hoursToday": "0:00",
             "avgStart": "--",
-            "chartData": [],
+            "chartData": chart_data,
             "recentLogs": [],
         }
     else:
-        if not record.check_out:
-            duration = datetime.now() - record.check_in
-            total_hours = duration.total_seconds() / 3600
-        else:
-            total_hours = record.total_hours
+        records = (
+            db.query(Attendance)
+            .filter(Attendance.user_id == user["id"], Attendance.date == today)
+            .all()
+        )
+
+        total_hours = 0
+
+        for r in records:
+            if r.check_out:
+                total_hours += r.total_hours or 0
+            else:
+                duration = datetime.now() - r.check_in
+                total_hours += duration.total_seconds() / 3600
 
         attendance_data = {
             "hoursToday": format_hours_ui(total_hours),
+            "totalSeconds": int(total_hours * 3600),
             "avgStart": format_time_ui(record.check_in),
-            "chartData": [],
+            "chartData": chart_data,
             "recentLogs": [],
         }
 
@@ -75,7 +103,7 @@ def get_dashboard(db: Session = Depends(get_db), user=Depends(get_current_user))
     for r in records:
         logs.append(
             {
-                "date": r.date.strftime("%Y-%m-%d"),
+                "date": r.date.strftime("%b %d, %a"),  # Apr 07, Tue
                 "time": f"{format_time_ui(r.check_in)} - {format_time_ui(r.check_out)}",
             }
         )

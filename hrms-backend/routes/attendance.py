@@ -25,14 +25,20 @@ def format_hours(hours: float):
 def punch_in(db: Session = Depends(get_db), user=Depends(get_current_user)):
     today = date.today()
 
-    existing = (
+    # Check if user already has an ACTIVE session
+
+    active_session = (
         db.query(Attendance)
-        .filter(Attendance.user_id == user["id"], Attendance.date == today)
+        .filter(
+            Attendance.user_id == user["id"],
+            Attendance.date == today,
+            Attendance.check_out == None,
+        )
         .first()
     )
 
-    if existing:
-        raise HTTPException(status_code=400, detail="Already punched in today")
+    if active_session:
+        raise HTTPException(status_code=400, detail="Already punched in")
 
     new_entry = Attendance(user_id=user["id"], check_in=datetime.now(), date=today)
 
@@ -50,7 +56,11 @@ def punch_out(db: Session = Depends(get_db), user=Depends(get_current_user)):
 
     record = (
         db.query(Attendance)
-        .filter(Attendance.user_id == user["id"], Attendance.date == today)
+        .filter(
+            Attendance.user_id == user["id"],
+            Attendance.date == today,
+            Attendance.check_out == None,
+        )
         .first()
     )
 

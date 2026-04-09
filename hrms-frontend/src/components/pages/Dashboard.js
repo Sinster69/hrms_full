@@ -56,6 +56,39 @@ export default function Dashboard() {
     }
   }, [data]);
 
+  useEffect(() => {
+  let interval;
+
+  if (isPunchedIn) {
+    interval = setInterval(() => {
+      setLiveSeconds((prev) => prev + 1);
+    }, 1000);
+  }
+
+    return () => clearInterval(interval);
+  }, [isPunchedIn]);
+
+  useEffect(() => {
+    let syncInterval;
+
+    if (isPunchedIn) {
+      syncInterval = setInterval(async () => {
+        try {
+          const updated = await getDashboard();
+
+          // 🔥 convert backend "HH:MM" → seconds
+          const seconds = updated.attendance.totalSeconds;
+          setLiveSeconds(seconds);
+          
+        } catch (err) {
+          console.error("Sync failed", err);
+        }
+      }, 30000); // every 30 sec
+    }
+
+    return () => clearInterval(syncInterval);
+  }, [isPunchedIn]);
+
   const handlePunchToggle = async () => {
   if (isPunchedIn) {
     await punchOut();
@@ -68,6 +101,12 @@ export default function Dashboard() {
   setDashboardData(updated);
 
   setIsPunchedIn((prev) => !prev);
+  };
+
+  const formatTime = (seconds) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    return `${h}:${m.toString().padStart(2, "0")}`;
   };
 
   return (
@@ -123,7 +162,11 @@ export default function Dashboard() {
               <div className="lg:col-span-2 space-y-5">
                 <motion.div variants={cardVariants}>
                   <AttendanceChart
-                    hoursToday={dashboardData?.attendance.hoursToday}
+                    hoursToday={
+                      isPunchedIn
+                        ? formatTime(liveSeconds)
+                        : dashboardData?.attendance.hoursToday
+                    }
                     avgStart={dashboardData?.attendance.avgStart}
                     chartData={dashboardData?.attendance.chartData}
                     recentLogs={dashboardData?.attendance.recentLogs}
